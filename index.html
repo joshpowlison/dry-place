@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<!-- <link type="text/css" rel="stylesheet" href="main.css"> -->
+		<style>
+			body{
+				padding:0;
+				margin:0;
+			}
+			
+			#viewer{
+			
+			}
+		</style>
+	</head>
+	<body>
+		<div id="viewer"></div>
+		<script src="three/three.min.js"></script>
+		<script src="three/GLTFLoader.js"></script>
+		<script>
+		
+			// Set the scene size.
+			const WIDTH = 320;
+			const HEIGHT = 240;
+
+			// Set some camera attributes.
+			const VIEW_ANGLE = 90;
+			const ASPECT = WIDTH / HEIGHT;
+			const NEAR = 0.1;
+			const FAR = 10000;
+
+			// Get the DOM element to attach to
+			const container =
+				document.querySelector('#container');
+
+			// Create a WebGL renderer, camera
+			// and a scene
+			const renderer = new THREE.WebGLRenderer();
+			const camera =
+				new THREE.PerspectiveCamera(
+					VIEW_ANGLE,
+					ASPECT,
+					NEAR,
+					FAR
+				);
+				
+			camera.position.set( 0, 1, 0 );
+
+			const scene = new THREE.Scene();
+
+			// Add the camera to the scene.
+			scene.add(camera);
+			
+			const pointLight = new THREE.PointLight(0xFFFFFF);
+			pointLight.position.x = 10;
+			pointLight.position.y = 10;
+			pointLight.position.z = 10;
+
+			// add to the scene
+			scene.add(pointLight);
+			
+			//const ambientLight = new THREE.AmbientLight(0xFFFFFF);
+			scene.add(new THREE.AmbientLight(0xFFFFFF));
+
+			// Start the renderer.
+			renderer.setSize(WIDTH, HEIGHT);
+
+			// Attach the renderer-supplied
+			// DOM element.
+			document.getElementById('viewer').appendChild(renderer.domElement);
+
+			var loader = new THREE.GLTFLoader();
+			var model;
+			// Load model
+            loader.load("assets/game-scene.glb", function(gltf){
+				model = gltf.scene;
+                scene.add(gltf.scene);
+
+                /// NEXT STEPS ///
+            });
+			
+			function update () {
+			  // Draw!
+			  renderer.render(scene, camera);
+
+			  // Schedule the next frame.
+			  requestAnimationFrame(update);
+			}
+
+			// Schedule the first frame.
+			requestAnimationFrame(update);
+
+
+			// Units of movement are actually 2
+			window.addEventListener('keydown',function(event){
+				var vector = new THREE.Vector3(0, 0, -1);
+                vector = camera.localToWorld(vector);
+                vector.sub(camera.position); // Now vector is a unit vector with the same direction as the camera
+			
+				var checkFront = new THREE.Raycaster(camera.position, vector, 0, 2);
+				var front = checkFront.intersectObject(model,true).length;
+				
+				switch(event.key){
+					case 'ArrowLeft':
+					case 'a':
+						camera.rotateY(Math.PI / 2);
+						break;
+					case 'ArrowRight':
+					case 'd':
+						camera.rotateY(Math.PI / 2 * -1);
+						break;
+					case 'ArrowUp':
+					case 'w':
+						if(!front){
+							camera.translateZ(-2);
+						}
+						break;
+					case 'ArrowDown':
+					case 's':
+						var vectorBack = new THREE.Vector3(0, 0, 1);
+						vectorBack = camera.localToWorld(vectorBack);
+						vectorBack.sub(camera.position);
+						
+						var checkBack = new THREE.Raycaster(camera.position, vectorBack, 0, 2);
+						var back = checkBack.intersectObject(model,true).length;
+						
+						if(!back){
+							camera.translateZ(2);
+						}
+						break;
+				}
+			});
+
+		</script>
+	</body>
+</html>
