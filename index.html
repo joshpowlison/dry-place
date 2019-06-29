@@ -5,22 +5,63 @@
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<!-- <link type="text/css" rel="stylesheet" href="main.css"> -->
 		<style>
+			@font-face{
+				font-family: Caveat;
+				src: url('assets/caveat/caveat-regular.ttf');
+			}
+		
 			body{
 				padding:0;
 				margin:0;
+				
+				font-family:Caveat;
+				font-size:3em;
 			}
 			
 			#viewer{
+				position:fixed;
+				top:0;
+				left:0;
+				right:0;
+				bottom:0;
+				background-color:#000;
+			}
 			
+			#text-screen{
+				pointer-events:none;
+			
+				position:absolute;
+				left:0;
+				top:0;
+				right:0;
+				bottom:0;
+				background-color:#000;
+				color:#fff;
+				
+				opacity:1;
+				transition:opacity .5s;
+				
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				flex-direction: column;
+				box-sizing: border-box;
+				padding: 3em;
+				
+				z-index:10;
 			}
 		</style>
 	</head>
 	<body>
-		<div id="viewer"></div>
+		<div id="viewer">
+			<div id="text-screen"></div>
+		</div>
 		<script src="three/three.min.js"></script>
 		<script src="three/GLTFLoader.js"></script>
 		<script>
-		
+			var htmlCanvases = [];
+			var wallCanvases = [];
+			
 			// Set the scene size.
 			const WIDTH = 320;
 			const HEIGHT = 240;
@@ -46,7 +87,9 @@
 					FAR
 				);
 				
-			camera.position.set( 0, 1, 0 );
+			var playerHeight = 2;
+			
+			//camera.position.set( 30, playerHeight, 40 );
 
 			const scene = new THREE.Scene();
 
@@ -70,16 +113,29 @@
 			// Attach the renderer-supplied
 			// DOM element.
 			document.getElementById('viewer').appendChild(renderer.domElement);
+			
+			renderer.domElement.style.cssText = `
+				height: 100%;
+				width: 100%;
+				position: absolute;
+				object-fit: contain;
+			`;
+			
 
 			var loader = new THREE.GLTFLoader();
-			var model;
-			// Load model
-            loader.load("assets/game-scene.glb", function(gltf){
-				model = gltf.scene;
-                scene.add(gltf.scene);
-
-                /// NEXT STEPS ///
+			var ground, walls;
+			// Load walls
+            loader.load("assets/ground.glb", function(gltf){
+				ground = gltf.scene;
+                scene.add(ground);
             });
+			
+			// Load walls
+            loader.load("assets/walls.glb", function(gltf){
+				walls = gltf.scene;
+                scene.add(walls);
+            });
+			
 			
 			function update () {
 			  // Draw!
@@ -92,47 +148,270 @@
 			// Schedule the first frame.
 			requestAnimationFrame(update);
 
+			// Scriptures used throughout
+			const scriptures = [
+				'<p>Romans 15:4</p><p>For whatever things were written before were written for our learning, that through patience and through encouragement of the Scriptures we might have hope.</p>'
+				,'<p>2 Kings 2:9</p><p>When they had gone over, Elijah said to Elisha, “Ask what I shall do for you, before I am taken from you.”</p>'
+				,'<p>1 Peter 4:10-11</p><p>As each has received a gift, employ it in serving one another, as good managers of the grace of God in its various forms. If anyone speaks, let it be as it were the very words of God. If anyone serves, let it be as of the strength which God supplies, that in all things God may be glorified through Jesus Christ, to whom belong the glory and the dominion forever and ever. Amen.</p>'
+				,'<p>Jeremiah 35:15</p><p>I have sent also to you all my servants the prophets, rising up early and sending them… but you have not inclined your ear, nor listened to me.</p>' 
+				,'<p>Habakkuk 2:2</p><p>Yahweh answered me, “Write the vision, and make it plain on tablets, that he who runs may read it. For the vision is yet for the appointed time, and it hurries toward the end, and won’t prove false. Though it takes time, wait for it; because it will surely come. It won’t delay.”</p>'
+				,'<p>Exodus 40:36-37</p><p>When the cloud was taken up from over the tabernacle, the children of Israel went onward, throughout all their journeys; but if the cloud wasn’t taken up, then they didn’t travel until the day that it was taken up.</p>'
+				,'<p>Psalm 70:4</p><p>Let all those who seek you rejoice and be glad in you.</p>'
+				,'<p>Isaiah 30:9-11</p><p>For it is a rebellious people, lying children, children who will not hear Yahweh’s law; who tell the seers, “Don’t see!” and to the prophets, “Don’t prophesy to us right things. Tell us pleasant things. Prophesy deceits. Get out of the way. Turn aside from the path. Cause the Holy One of Israel to cease from before us.”</p>'
+				,'<p>Proverbs 1:8-9</p><p>My son, listen to your father’s instruction, and don’t forsake your mother’s teaching: for they will be a garland to grace your head, and chains around your neck.</p>'
+				,'<p>1 Timothy 4:16</p><p>Pay attention to yourself, and to your teaching. Continue in these things, for in doing this you will save both yourself and those who hear you.</p>'
+				,'<p>Matthew 5:17</p><p>“Don’t think that I came to destroy the law or the prophets. I didn’t come to destroy, but to fulfill.”</p>'
+				,'<p>Titus 3:14</p>Let our people also learn to maintain good works for necessary uses, that they may not be unfruitful.</p>'
+				,'<p>1 Samuel 15:17-19</p><p>Samuel said, “Though you were little in your own sight, weren’t you made the head of the tribes of Israel? Yahweh anointed you king over Israel; and Yahweh sent you on a journey... Why then didn’t you obey Yahweh’s voice, but took the plunder, and did that which was evil in Yahweh’s sight?”</p>'
+			];
+
+
+			const lifespan = 30; // The number of seconds we have to live
+			const textScreen = document.getElementById('text-screen');
+			
+			var deaths = -1;
+			var tenthsLeft = 0;
+			
+			var lifeCounter;
+			
+			// Tracks seconds and shows us if we're near the end
+			function tenthSecond(){
+				tenthsLeft--;
+				//console.log(tenthsLeft);
+				
+				switch(tenthsLeft){
+					case 122:
+						textScreen.innerHTML = '';
+						break;
+					case 121:
+					case 62:
+						textScreen.style.opacity = 1;
+						break;
+					case 115:
+					case 56:
+						textScreen.style.opacity = 0;
+						break;
+					case 0:
+						die();
+						break;
+				}
+			}
+
+			var delay;
+
+			function die(){
+				deaths++;
+				
+				// Don't keep counting down life
+				clearInterval(lifeCounter);
+				
+				// Show a scripture, or nothing
+				if(deaths < scriptures.length) textScreen.innerHTML = '<p>' + scriptures[deaths] + '</p>';
+				else textScreen.innerHTML = '';
+				
+				textScreen.innerHTML += '<small>Press the Spacebar to continue</small>';
+				
+				textScreen.style.opacity = 1;
+				
+				// We save this timeout so we can cancel if the user skips the cutscene
+				delay = setTimeout(start,textScreen.innerText.length * 70);
+			}
+			
+			function win(){
+				clearInterval(lifeCounter);
+				
+				textScreen.style.backgroundColor = '#fff';
+				textScreen.style.color = '#000';
+				
+				textScreen.innerHTML = '<p></p>';
+				
+				textScreen.style.opacity = 1;
+			}
+			
+			const radius = 20; // in player movements; 2 blocks for 1 movement
+			
+			function start(){
+				textScreen.style.opacity = 0;
+				lifeCounter = setInterval(tenthSecond,100);
+				tenthsLeft = lifespan * 10;
+				
+				var side = Math.random();
+				
+				var startX, startZ;
+				
+				// The side we're working from
+				// X variant, Z top
+				if(side < .25){
+					side = 0;
+					startZ = (radius * .9) + (Math.random() * (radius * .1));
+					
+					camera.setRotationFromAxisAngle(new THREE.Vector3(0,1,0),45);
+				// X variant, Z bottom
+				}else if(side < .5){
+					side = 1;
+					startZ = (-radius * .9) + (Math.random() * (-radius * .1));
+					
+					camera.setRotationFromAxisAngle(new THREE.Vector3(0,1,0),45);
+				// X top, Z variant
+				}else if(side < .75){
+					side = 2;
+					startX = (-radius * .9) + (Math.random() * (-radius * .1));
+					
+					//camera.setRotationFromAxisAngle(new THREE.Vector3(0,1,0),45);
+				// X bottom, Z variant
+				}else{
+					side = 3;
+					startX = (Math.random() * (radius * .1));
+					
+					//camera.setRotationFromAxisAngle(new THREE.Vector3(0,1,0),45);
+					//camera.lookAt(0,playerHeight,0);
+				}
+				
+				if(side <= 1){
+					startX = (Math.random() * radius * 2) - radius;
+				}else{
+					startZ = (Math.random() * radius * 2) - radius;
+				}
+				
+				camera.position.x = Math.round(startX) * 2;
+				camera.position.y = playerHeight;
+				camera.position.z = Math.round(startZ) * 2;
+				console.log("Here's where we started:",camera.position);
+				
+				// Choose where to look
+				switch(side){
+					case 0:
+						camera.lookAt(new THREE.Vector3(camera.position.x,camera.position.y,camera.position.z - 1));
+						break;
+					case 1:
+						camera.lookAt(new THREE.Vector3(camera.position.x,camera.position.y,camera.position.z + 1));
+						break;
+					case 2:
+						camera.lookAt(new THREE.Vector3(camera.position.x + 1,camera.position.y,camera.position.z));
+						break;
+					case 3:
+						camera.lookAt(new THREE.Vector3(camera.position.x - 1,camera.position.y,camera.position.z));
+						break;
+				}
+				
+				console.log('case is ',side);
+			}
 
 			// Units of movement are actually 2
 			window.addEventListener('keydown',function(event){
-				var vector = new THREE.Vector3(0, 0, -1);
-                vector = camera.localToWorld(vector);
-                vector.sub(camera.position); // Now vector is a unit vector with the same direction as the camera
-			
-				var checkFront = new THREE.Raycaster(camera.position, vector, 0, 2);
-				var front = checkFront.intersectObject(model,true).length;
+				// If we're not alive or not playing, consider that
+				if(tenthsLeft <= 0){
+					switch(event.key){
+						case ' ':
+							clearTimeout(delay);
+							start();
+							break;
+						default:
+							break;
+					}
+				// Allow register controls while we're alive
+				}else{
+					var vector = new THREE.Vector3(0, 0, -1);
+					vector = camera.localToWorld(vector);
+					vector.sub(camera.position); // Now vector is a unit vector with the same direction as the camera
 				
-				switch(event.key){
-					case 'ArrowLeft':
-					case 'a':
-						camera.rotateY(Math.PI / 2);
-						break;
-					case 'ArrowRight':
-					case 'd':
-						camera.rotateY(Math.PI / 2 * -1);
-						break;
-					case 'ArrowUp':
-					case 'w':
-						if(!front){
-							camera.translateZ(-2);
-						}
-						break;
-					case 'ArrowDown':
-					case 's':
-						var vectorBack = new THREE.Vector3(0, 0, 1);
-						vectorBack = camera.localToWorld(vectorBack);
-						vectorBack.sub(camera.position);
+					var checkFront = new THREE.Raycaster(camera.position, vector, 0, 2);
+					var front = checkFront.intersectObject(walls,true).length;
+					
+					var moved = false;
+					
+					switch(event.key){
+						case 'ArrowLeft':
+						case 'a':
+							camera.rotateY(Math.PI / 2);
+							break;
+						case 'ArrowRight':
+						case 'd':
+							camera.rotateY(Math.PI / 2 * -1);
+							break;
+						case 'ArrowUp':
+						case 'w':
+							if(!front){
+								camera.translateZ(-2);
+								moved = true;
+							}
+							break;
+						case 'ArrowDown':
+						case 's':
+							var vectorBack = new THREE.Vector3(0, 0, 1);
+							vectorBack = camera.localToWorld(vectorBack);
+							vectorBack.sub(camera.position);
+							
+							var checkBack = new THREE.Raycaster(camera.position, vectorBack, 0, 2);
+							var back = checkBack.intersectObject(walls,true).length;
+							
+							if(!back){
+								camera.translateZ(2);
+								moved = true;
+							}
+							break;
+						case ' ':
+							if(front){
+								var draw = checkFront.intersectObjects(wallCanvases,true).length;
+							
+								// Draw on the existing canvas, or make a new one
+								var target;
+								if(draw.length){
+									console.log('old drawing');
+									target = draw[0];
+								}else{
+									console.log('new drawing!');
+									var canvas = document.createElement('canvas');
+									canvas.width = 240;
+									canvas.height = 240;
+									htmlCanvases.push(canvas);
+									target = canvas;
+									
+									var ctx = canvas.getContext('2d');
+									ctx.font = 'Bold 20px Arial';
+
+									ctx.fillStyle = 'white';
+									ctx.fillText('poop', 0, 20);
+									ctx.strokeStyle = 'black';
+									ctx.strokeText('poop', 0, 20);
+									
+									// canvas contents will be used for a texture
+									var texture = new THREE.CanvasTexture(canvas);
+									var geometry = new THREE.PlaneGeometry(2, 2);
+									var plane = new THREE.Mesh(geometry, texture);
+									
+									plane.position = camera.position;
+									//plane.rotateOnAxis(THREE.Vector3(0,0,0), camera.rotation);
+									plane.translateOnAxis(vector,1.8);
+									plane.lookAt(camera.position);
+									
+									wallCanvases.push(plane);
+									
+									console.log(plane);
+									
+									scene.add(plane);
+								}
+
+							}
+							break;
+					}
+					
+					// If we moved, moved to the highest point on the ground here
+					if(moved){
+						var groundMeasureStart = new THREE.Vector3(camera.position.x, 100, camera.position.z);
+					
+						var groundMeasureRay = new THREE.Raycaster(groundMeasureStart, new THREE.Vector3(0,-1,0), 0, 200);
+						console.log('measure ray',groundMeasureRay);
+						var groundCheck = groundMeasureRay.intersectObject(ground,true);
 						
-						var checkBack = new THREE.Raycaster(camera.position, vectorBack, 0, 2);
-						var back = checkBack.intersectObject(model,true).length;
-						
-						if(!back){
-							camera.translateZ(2);
+						// Move the camera to the ground
+						if(groundCheck.length){
+							camera.position.y = groundCheck[0].point.y + playerHeight;
 						}
-						break;
+						console.log('There should always be ground:',groundCheck);
+					}
 				}
 			});
-
 		</script>
 	</body>
 </html>
